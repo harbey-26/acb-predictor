@@ -1,0 +1,58 @@
+{
+  "feature_cols": [
+    "home_pts_avg_5",
+    "home_pts_conceded_avg_5",
+    "home_win_rate_5",
+    "away_pts_avg_5",
+    "away_pts_conceded_avg_5",
+    "away_win_rate_5",
+    "pts_diff_5",
+    "win_rate_diff_5",
+    "home_pts_avg_10",
+    "home_pts_conceded_avg_10",
+    "home_win_rate_10",
+    "away_pts_avg_10",
+    "away_pts_conceded_avg_10",
+    "away_win_rate_10",
+    "pts_diff_10",
+    "win_rate_diff_10",
+    "home_t3_pct_avg_5",
+    "home_t2_pct_avg_5",
+    "home_reb_avg_5",
+    "home_ast_avg_5",
+    "home_val_avg_5",
+    "away_t3_pct_avg_5",
+    "away_t2_pct_avg_5",
+    "away_reb_avg_5",
+    "away_ast_avg_5",
+    "away_val_avg_5",
+    "val_diff_5",
+    "home_streak_5",
+    "away_streak_5",
+    "h2h_home_wins",
+    "h2h_total",
+    "h2h_home_rate",
+    "is_home"
+  ],
+  "train_seasons": [
+    "2020-21",
+    "2021-22",
+    "2022-23",
+    "2023-24"
+  ],
+  "calibration_season": "2023-24",
+  "test_season": "2024-25",
+  "params": {
+    "n_estimators": 300,
+    "max_depth": 4,
+    "learning_rate": 0.05,
+    "subsample": 0.8,
+    "colsample_bytree": 0.8,
+    "min_child_weight": 3
+  },
+  "test_metrics": {
+    "accuracy": 0.6928,
+    "roc_auc": 0.6931,
+    "brier": 0.2108
+  }
+}

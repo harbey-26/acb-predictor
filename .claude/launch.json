@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "ACB Predictor",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["/tmp/acb_run.py"],
+      "port": 8000
+    }
+  ]
+}

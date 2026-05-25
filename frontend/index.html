@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ACB Predictor · Liga Endesa</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <header>
+    <div class="header-inner">
+      <span class="logo-icon">🏀</span>
+      <div>
+        <h1>ACB Predictor</h1>
+        <p class="subtitle">Predicción de partidos · Liga Endesa · Modelo ML (69.3% accuracy)</p>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section class="card selector-card">
+      <h2>Selecciona los equipos</h2>
+
+      <div class="team-row">
+        <!-- Equipo local -->
+        <div class="team-block">
+          <label class="team-label local-label">🏠 Local</label>
+          <div class="select-wrapper">
+            <select id="sel-local" class="team-select">
+              <option value="">— Elige equipo —</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Botón intercambiar -->
+        <button id="btn-swap" class="swap-btn" title="Intercambiar local/visitante">⇄</button>
+
+        <!-- Equipo visitante -->
+        <div class="team-block">
+          <label class="team-label visit-label">✈️ Visitante</label>
+          <div class="select-wrapper">
+            <select id="sel-visit" class="team-select">
+              <option value="">— Elige equipo —</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <button id="btn-predict" class="predict-btn" disabled>
+        Predecir partido
+      </button>
+    </section>
+
+    <!-- Resultado -->
+    <section id="result-card" class="card result-card hidden">
+      <div id="result-content"></div>
+    </section>
+
+    <!-- Error -->
+    <div id="error-box" class="error-box hidden"></div>
+
+    <!-- Loading -->
+    <div id="loader" class="loader hidden">
+      <div class="spinner"></div>
+      <p>Calculando predicción…</p>
+    </div>
+  </main>
+
+  <footer>
+    <p>Datos: 1.663 partidos · 5 temporadas (2020-21 → 2024-25) · api2.acb.com</p>
+  </footer>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
