@@ -8,5 +8,6 @@ dist/
 build/
 .DS_Store
 data/raw/
+data/flashscore/
 *.log
 run_server.py

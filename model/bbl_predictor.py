@@ -1,6 +1,7 @@
 """
 Interfaz de predicción BBL para la API.
-Carga bbl_model.pkl y bbl_matches.csv para predicciones en tiempo real.
+v3: Carga bbl_matches_enriched.csv (con boxscores) para predicciones en tiempo real.
+Fallback a bbl_matches.csv si el enriquecido no existe.
 """
 
 from __future__ import annotations
@@ -17,7 +18,12 @@ import pandas as pd
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MODEL_PATH = os.path.join(BASE_DIR, "model", "artifacts", "bbl_model.pkl")
 META_PATH = os.path.join(BASE_DIR, "model", "artifacts", "bbl_model_meta.json")
-MATCHES_PATH = os.path.join(BASE_DIR, "data", "processed", "bbl_matches.csv")
+MATCHES_PATH          = os.path.join(BASE_DIR, "data", "processed", "bbl_matches.csv")
+ENRICHED_MATCHES_PATH = os.path.join(BASE_DIR, "data", "processed", "bbl_matches_enriched.csv")
+
+# Boxscore stats for v3 rolling predictions
+BOX_STATS  = ["fg_pct", "fg3_pct", "ft_pct", "reb", "ast", "tov"]
+BOX_WINDOWS = [5, 10]
 
 ELO_INITIAL = 1500
 ELO_K = 20
@@ -78,7 +84,8 @@ def _load() -> None:
         with open(META_PATH, encoding="utf-8") as f:
             _meta = json.load(f)
     if _matches_df is None:
-        _matches_df = pd.read_csv(MATCHES_PATH)
+        path = ENRICHED_MATCHES_PATH if os.path.exists(ENRICHED_MATCHES_PATH) else MATCHES_PATH
+        _matches_df = pd.read_csv(path)
         _matches_df["fecha"] = pd.to_datetime(_matches_df["fecha"], utc=True)
         _compute_elo_and_rest()
 
@@ -176,6 +183,50 @@ def _get_h2h(home_id: int, away_id: int, window: int = 10) -> Dict:
     }
 
 
+def _get_last_boxscore_stats(club_id: int, n: int = 5) -> Dict[str, float]:
+    """
+    Retorna el promedio de las últimas n actuaciones de boxscore del equipo.
+    Funciona tanto como local como visitante. Retorna {} si no hay datos.
+    """
+    _load()
+    if "home_fg_pct" not in _matches_df.columns:
+        return {}
+
+    # Columnas de boxscore home/away en el CSV
+    box_map = {
+        "fg_pct":  ("home_fg_pct",  "away_fg_pct"),
+        "fg3_pct": ("home_fg3_pct", "away_fg3_pct"),
+        "ft_pct":  ("home_ft_pct",  "away_ft_pct"),
+        "reb":     ("home_reb",     "away_reb"),
+        "ast":     ("home_ast",     "away_ast"),
+        "tov":     ("home_tov",     "away_tov"),
+    }
+
+    rows = []
+    for _, row in _matches_df.iterrows():
+        if row["club_local_id"] == club_id:
+            entry = {"fecha": row["fecha"]}
+            for stat, (hc, _) in box_map.items():
+                entry[stat] = row.get(hc, np.nan)
+            rows.append(entry)
+        elif row["club_visitante_id"] == club_id:
+            entry = {"fecha": row["fecha"]}
+            for stat, (_, ac) in box_map.items():
+                entry[stat] = row.get(ac, np.nan)
+            rows.append(entry)
+
+    if not rows:
+        return {}
+
+    hist = pd.DataFrame(rows).sort_values("fecha").tail(n)
+    result = {}
+    for stat in BOX_STATS:
+        if stat in hist.columns:
+            val = hist[stat].dropna().mean()
+            result[stat] = float(val) if not np.isnan(val) else np.nan
+    return result
+
+
 def predict(equipo_local: str, equipo_visitante: str) -> Dict:
     _load()
     home_id = _get_club_id(equipo_local)
@@ -194,6 +245,11 @@ def predict(equipo_local: str, equipo_visitante: str) -> Dict:
     hs3 = _get_last_stats(home_id, 3)
     as3 = _get_last_stats(away_id, 3)
     h2h = _get_h2h(home_id, away_id)
+    # Boxscore rolling (v3)
+    hbox5  = _get_last_boxscore_stats(home_id, 5)
+    abox5  = _get_last_boxscore_stats(away_id, 5)
+    hbox10 = _get_last_boxscore_stats(home_id, 10)
+    abox10 = _get_last_boxscore_stats(away_id, 10)
 
     # ELO actual
     home_elo = _elo_ratings.get(home_id, ELO_INITIAL) if _elo_ratings else ELO_INITIAL
@@ -248,6 +304,14 @@ def predict(equipo_local: str, equipo_visitante: str) -> Dict:
         "home_days_rest": home_rest,
         "away_days_rest": away_rest,
         "rest_diff": home_rest - away_rest,
+        # Boxscore rolling features (v3) — diferencias home−away por ventana
+        **{
+            f"{stat}_diff_{w}": (
+                (hbox5 if w == 5 else hbox10).get(stat, np.nan) -
+                (abox5 if w == 5 else abox10).get(stat, np.nan)
+            )
+            for w in BOX_WINDOWS for stat in BOX_STATS
+        },
     }
 
     feature_cols = _meta["feature_cols"]

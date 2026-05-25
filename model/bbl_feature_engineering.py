@@ -1,8 +1,11 @@
 """
 Feature Engineering para la BBL (Basketball Bundesliga).
 
-Genera data/processed/bbl_features.csv con features rolling basadas en
-puntos y resultados (win/loss). Sin t2/t3/reb/ast (obfuscados en fuente).
+v2: ELO dinámico + días de descanso
+v3: + boxscores FlashScore (FG%, 3P%, FT%, REB, AST, TOV)
+
+Genera data/processed/bbl_features.csv con features rolling.
+Usa bbl_matches_enriched.csv si existe, si no bbl_matches.csv (sin boxscore).
 
 Uso:
     python -m model.bbl_feature_engineering
@@ -17,8 +20,13 @@ import numpy as np
 import pandas as pd
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-MATCHES_PATH = os.path.join(BASE_DIR, "data", "processed", "bbl_matches.csv")
-OUTPUT_PATH = os.path.join(BASE_DIR, "data", "processed", "bbl_features.csv")
+MATCHES_PATH          = os.path.join(BASE_DIR, "data", "processed", "bbl_matches.csv")
+ENRICHED_MATCHES_PATH = os.path.join(BASE_DIR, "data", "processed", "bbl_matches_enriched.csv")
+OUTPUT_PATH           = os.path.join(BASE_DIR, "data", "processed", "bbl_features.csv")
+
+# Estadísticas de boxscore para rolling features (v3)
+BOX_STATS = ["fg_pct", "fg3_pct", "ft_pct", "reb", "ast", "tov"]
+BOX_WINDOWS = [5, 10]
 
 WINDOWS = [5, 10]
 H2H_WINDOW = 10
@@ -32,7 +40,11 @@ MAX_DAYS_REST = 30  # cap para días de descanso (inicio de temporada)
 
 
 def load_matches() -> pd.DataFrame:
-    df = pd.read_csv(MATCHES_PATH)
+    """Carga el CSV de partidos. Usa el enriquecido con boxscores si existe."""
+    path = ENRICHED_MATCHES_PATH if os.path.exists(ENRICHED_MATCHES_PATH) else MATCHES_PATH
+    if path == ENRICHED_MATCHES_PATH:
+        print(f"  Usando CSV enriquecido: {os.path.basename(path)}")
+    df = pd.read_csv(path)
     df["fecha"] = pd.to_datetime(df["fecha"], utc=True)
     df = df.sort_values("fecha", kind="mergesort").reset_index(drop=True)
     return df
@@ -202,6 +214,68 @@ def compute_days_rest(df: pd.DataFrame) -> Dict[str, Dict]:
     return results
 
 
+def build_team_boxscore_history(df: pd.DataFrame) -> Optional[pd.DataFrame]:
+    """
+    Construye historial largo con stats de boxscore por equipo.
+    Retorna None si el DataFrame no contiene columnas de boxscore.
+    """
+    if "home_fg_pct" not in df.columns:
+        return None
+
+    box_stat_map = {
+        "fg_pct":  ("home_fg_pct",  "away_fg_pct"),
+        "fg3_pct": ("home_fg3_pct", "away_fg3_pct"),
+        "ft_pct":  ("home_ft_pct",  "away_ft_pct"),
+        "reb":     ("home_reb",     "away_reb"),
+        "ast":     ("home_ast",     "away_ast"),
+        "tov":     ("home_tov",     "away_tov"),
+    }
+
+    local_cols  = {"club_id": "club_local_id", "game_id": "game_id", "fecha": "fecha"}
+    visit_cols  = {"club_id": "club_visitante_id", "game_id": "game_id", "fecha": "fecha"}
+
+    # Solo partidos con al menos una stat de boxscore no-nula
+    df_box = df.dropna(subset=["home_fg_pct"], how="all").copy()
+
+    local_rows: List[Dict] = []
+    visit_rows: List[Dict] = []
+    for _, row in df_box.iterrows():
+        base = {"game_id": row["game_id"], "fecha": row["fecha"]}
+        lrow = {**base, "club_id": int(row["club_local_id"])}
+        vrow = {**base, "club_id": int(row["club_visitante_id"])}
+        for stat, (hcol, acol) in box_stat_map.items():
+            lrow[stat] = row[hcol] if hcol in row and not pd.isna(row[hcol]) else np.nan
+            vrow[stat] = row[acol] if acol in row and not pd.isna(row[acol]) else np.nan
+        local_rows.append(lrow)
+        visit_rows.append(vrow)
+
+    history = pd.concat(
+        [pd.DataFrame(local_rows), pd.DataFrame(visit_rows)], ignore_index=True
+    )
+    history = history.sort_values(["club_id", "fecha", "game_id"], kind="mergesort")
+    return history.reset_index(drop=True)
+
+
+def compute_rolling_boxscore_stats(history: pd.DataFrame, window: int) -> pd.DataFrame:
+    """Rolling stats de boxscore por equipo con shift(1) anti-leakage."""
+    results: List[pd.DataFrame] = []
+    stats = [c for c in BOX_STATS if c in history.columns]
+
+    for club_id, grp in history.groupby("club_id", sort=False):
+        grp = grp.sort_values("fecha", kind="mergesort").reset_index(drop=True)
+        rolled: Dict[str, pd.Series] = {}
+        for col in stats:
+            rolled[f"{col}_avg_{window}"] = (
+                grp[col].shift(1).rolling(window=window, min_periods=1).mean()
+            )
+        rolled_df = pd.DataFrame(rolled)
+        rolled_df["game_id"] = grp["game_id"].values
+        rolled_df["club_id"] = club_id
+        results.append(rolled_df)
+
+    return pd.concat(results, ignore_index=True) if results else pd.DataFrame()
+
+
 def build_features(df: pd.DataFrame) -> pd.DataFrame:
     """Construye el dataset de features para partidos de liga regular."""
     df_lr = df[df["is_playoff"] == 0].copy().reset_index(drop=True)
@@ -233,6 +307,23 @@ def build_features(df: pd.DataFrame) -> pd.DataFrame:
         }
         for _, row in h2h_df.iterrows()
     }
+
+    # Boxscore rolling features (v3) — opcionales
+    box_lookups: Dict[int, Dict[Tuple[str, int], Dict]] = {}
+    box_history = build_team_boxscore_history(df_lr)
+    has_boxscore = box_history is not None and not box_history.empty
+    if has_boxscore:
+        for w in BOX_WINDOWS:
+            rolled_box = compute_rolling_boxscore_stats(box_history, window=w)
+            blookup: Dict[Tuple[str, int], Dict] = {}
+            for _, row in rolled_box.iterrows():
+                key = (row["game_id"], int(row["club_id"]))
+                blookup[key] = row.drop(["game_id", "club_id"]).to_dict()
+            box_lookups[w] = blookup
+        n_box = df_lr["home_fg_pct"].notna().sum()
+        print(f"  Boxscore: {n_box}/{len(df_lr)} partidos con stats ({n_box/len(df_lr)*100:.0f}%)")
+    else:
+        print("  Boxscore: no disponible (usando solo pts/wins)")
 
     # Window 3 (win rate de los últimos 3 partidos – feature más importante en ACB)
     rolled_3 = compute_rolling_stats(history, window=3)
@@ -334,6 +425,22 @@ def build_features(df: pd.DataFrame) -> pd.DataFrame:
         row["away_days_rest"] = rest.get("away_days_rest", 7)
         row["rest_diff"] = rest.get("rest_diff", 0)
 
+        # Boxscore rolling features (v3)
+        if has_boxscore:
+            for w in BOX_WINDOWS:
+                bh = box_lookups[w].get((gid, home_id), {})
+                ba = box_lookups[w].get((gid, away_id), {})
+                for stat in BOX_STATS:
+                    h_val = bh.get(f"{stat}_avg_{w}", np.nan)
+                    a_val = ba.get(f"{stat}_avg_{w}", np.nan)
+                    row[f"home_{stat}_avg_{w}"] = h_val
+                    row[f"away_{stat}_avg_{w}"] = a_val
+                    row[f"{stat}_diff_{w}"] = (
+                        h_val - a_val
+                        if not (np.isnan(h_val) or np.isnan(a_val))
+                        else np.nan
+                    )
+
         row["target"] = 1 if match["ganador"] == "local" else 0
         feature_rows.append(row)
 
@@ -341,11 +448,13 @@ def build_features(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def main() -> None:
-    print("Cargando bbl_matches.csv...")
+    print("Cargando partidos BBL...")
     df = load_matches()
     total = len(df)
     regular = (df["is_playoff"] == 0).sum()
+    has_box = "home_fg_pct" in df.columns
     print(f"  Total: {total} partidos | Liga regular: {regular}")
+    print(f"  Boxscores disponibles: {'sí' if has_box else 'no'}")
 
     print("Construyendo features BBL...")
     features_df = build_features(df)
@@ -358,7 +467,10 @@ def main() -> None:
     meta_cols = {"game_id", "temporada", "fecha", "equipo_local", "equipo_visitante",
                  "club_local_id", "club_visitante_id", "target"}
     feat_cols = [c for c in features_df.columns if c not in meta_cols]
-    print(f"Dataset: {n_rows} filas, {len(feat_cols)} features")
+    box_feat_cols = [c for c in feat_cols if any(s in c for s in BOX_STATS)]
+    print(f"\nDataset: {n_rows} filas, {len(feat_cols)} features")
+    print(f"  → {len(feat_cols) - len(box_feat_cols)} features base (v2)")
+    print(f"  → {len(box_feat_cols)} features boxscore (v3)")
     print(f"Target=1 (local gana): {target_rate:.1f}%")
     print(f"Guardado en: {OUTPUT_PATH}")
     by_season = features_df.groupby("temporada").size()

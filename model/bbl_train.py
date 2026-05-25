@@ -38,6 +38,16 @@ ARTIFACTS_DIR = os.path.join(BASE_DIR, "model", "artifacts")
 MODEL_PATH = os.path.join(ARTIFACTS_DIR, "bbl_model.pkl")
 META_PATH = os.path.join(ARTIFACTS_DIR, "bbl_model_meta.json")
 
+_BOX_STATS  = ["fg_pct", "fg3_pct", "ft_pct", "reb", "ast", "tov"]
+_BOX_WINDOWS = [5, 10]
+# Solo diferencias (home - away) por ventana: 6 stats × 2 ventanas = 12 features
+# Mejor generalización que incluir home_/away_ por separado (menos overfitting)
+_BOX_FEATURES = [
+    f"{stat}_diff_{w}"
+    for w in _BOX_WINDOWS
+    for stat in _BOX_STATS
+]
+
 FEATURE_COLS = [
     "home_pts_avg_5", "home_pts_conceded_avg_5", "home_win_rate_5",
     "away_pts_avg_5", "away_pts_conceded_avg_5", "away_win_rate_5",
@@ -53,6 +63,8 @@ FEATURE_COLS = [
     # v2: ELO dinámico + días de descanso
     "home_elo", "away_elo", "elo_diff",
     "home_days_rest", "away_days_rest", "rest_diff",
+    # v3: boxscore FlashScore — diferencias (home - away) en FG%, 3P%, FT%, REB, AST, TOV
+    *_BOX_FEATURES,
 ]
 
 TARGET_COL = "target"
@@ -193,7 +205,7 @@ def main() -> None:
     print(f"\nModelo guardado en: {MODEL_PATH}")
 
     meta = {
-        "model_name": "BBL_XGBoost_v2_elo",
+        "model_name": "BBL_XGBoost_v3_boxscore",
         "accuracy_test": round(acc, 4),
         "roc_auc_test": round(auc, 4),
         "brier_test": round(brier, 4),
