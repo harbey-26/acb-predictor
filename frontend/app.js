@@ -137,29 +137,44 @@ function renderResult(d) {
   const verdictClass = isLocalWin ? 'win-local' : 'win-visit';
 
   const f = d.features_usadas;
-  const ligaLabel = currentLiga === 'bbl' ? 'Diferencial puntos' : 'Valoración ACB promedio';
+  const ligaLabel = currentLiga === 'bbl' ? 'Dif. puntos prom.' : 'Valoración ACB prom.';
+
+  // Apply winner-colored top border
+  resultCard.classList.remove('win-local', 'win-visit');
+  resultCard.classList.add(verdictClass);
 
   resultContent.innerHTML = `
     <!-- Cabecera del partido -->
     <div class="match-header">
-      <span class="team-name local">${d.equipo_local}</span>
-      <span class="vs-badge">VS</span>
-      <span class="team-name visit">${d.equipo_visitante}</span>
+      <div class="team-name-block ${isLocalWin ? 'winner' : ''}">
+        ${isLocalWin ? '<span class="crown">👑</span>' : ''}
+        <span class="team-name local">${d.equipo_local}</span>
+        <span class="team-role-tag local-tag">🏠 Local</span>
+      </div>
+      <div class="vs-center">
+        <span class="vs-badge">VS</span>
+      </div>
+      <div class="team-name-block right ${!isLocalWin ? 'winner' : ''}">
+        ${!isLocalWin ? '<span class="crown">👑</span>' : ''}
+        <span class="team-name visit">${d.equipo_visitante}</span>
+        <span class="team-role-tag visit-tag">✈️ Visitante</span>
+      </div>
     </div>
 
-    <!-- Barras de probabilidad -->
+    <!-- Probabilidades -->
     <div class="prob-section">
-      <div class="prob-label-row">
-        <span class="prob-label">🏠 ${d.equipo_local}</span>
-        <span class="prob-label">✈️ ${d.equipo_visitante}</span>
-      </div>
-      <div class="prob-label-row">
-        <span class="prob-value local">${pL}%</span>
-        <span class="prob-value visit">${pV}%</span>
+      <div class="prob-numbers-row">
+        <span class="prob-value local" id="pval-local">0.0%</span>
+        <div class="prob-center-label">Prob. victoria</div>
+        <span class="prob-value visit" id="pval-visit">0.0%</span>
       </div>
       <div class="prob-bar-track">
-        <div class="prob-bar-local"  style="width:${pL}%"></div>
-        <div class="prob-bar-visit"  style="width:${pV}%"></div>
+        <div class="prob-bar-local" id="pbar-local" style="width:0%"></div>
+        <div class="prob-bar-visit" id="pbar-visit" style="width:0%"></div>
+      </div>
+      <div class="prob-teams-row">
+        <span class="prob-team-label local">${d.equipo_local}</span>
+        <span class="prob-team-label visit">${d.equipo_visitante}</span>
       </div>
     </div>
 
@@ -172,38 +187,90 @@ function renderResult(d) {
     </div>
 
     <!-- Stats clave -->
-    <p class="stats-title">📊 Estadísticas recientes (base del modelo)</p>
+    <p class="stats-title">📊 Estadísticas recientes</p>
     <div class="stats-grid">
-      ${statRow('% Victorias recientes',
-          pct(f.home_win_rate_reciente), pct(f.away_win_rate_reciente))}
-      ${statRow('Puntos promedio',
-          f.home_pts_promedio.toFixed(1), f.away_pts_promedio.toFixed(1))}
-      ${statRow(ligaLabel,
-          f.home_val_promedio.toFixed(1), f.away_val_promedio.toFixed(1))}
-      ${statRow('H2H enfrentamientos',
-          f.h2h_enfrentamientos, f.h2h_enfrentamientos)}
-      ${statRow('H2H tasa victoria local',
-          pct(f.h2h_tasa_local), '—')}
+      ${statBar('% Victorias rec.', f.home_win_rate_reciente, f.away_win_rate_reciente, 'pct')}
+      ${statBar('Puntos promedio', f.home_pts_promedio, f.away_pts_promedio, 'raw')}
+      ${statBar(ligaLabel, f.home_val_promedio, f.away_val_promedio, 'raw')}
+      ${statBar('H2H victoria local', f.h2h_tasa_local, 1 - f.h2h_tasa_local, 'pct')}
     </div>
+
+    <button class="predict-again-btn" onclick="scrollToTop()">↑ Nueva predicción</button>
   `;
 
   resultCard.classList.remove('hidden');
+
+  // Animate probability counters
+  animateCounter('pval-local', parseFloat(pL));
+  animateCounter('pval-visit', parseFloat(pV));
+
+  // Animate probability bars (short delay so CSS transition triggers)
+  setTimeout(() => {
+    const bl = document.getElementById('pbar-local');
+    const bv = document.getElementById('pbar-visit');
+    if (bl) bl.style.width = pL + '%';
+    if (bv) bv.style.width = pV + '%';
+  }, 80);
 }
 
-function statRow(label, lv, vv) {
+// Build a stat row with mini comparison bar
+function statBar(label, localVal, visitVal, format) {
+  const lNum = Number(localVal) || 0;
+  const vNum = Number(visitVal) || 0;
+
+  let lDisplay, vDisplay;
+  if (format === 'pct') {
+    lDisplay = (lNum * 100).toFixed(0) + '%';
+    vDisplay = (vNum * 100).toFixed(0) + '%';
+  } else {
+    lDisplay = lNum.toFixed(1);
+    vDisplay = vNum.toFixed(1);
+  }
+
+  const [lPct, vPct] = miniBarWidths(lNum, vNum);
+  const localWins = lNum >= vNum;
+
   return `
     <div class="stat-row">
       <span class="stat-name">${label}</span>
-      <span class="stat-vals">
-        <span class="lv">${lv}</span>
-        <span style="color:#cbd5e1">|</span>
-        <span class="vv">${vv}</span>
-      </span>
+      <div class="stat-values-row">
+        <span class="stat-val lv ${localWins ? 'stat-winner' : ''}">${lDisplay}</span>
+        <div class="stat-mini-bar-track">
+          <div class="stat-mini-bar-local" style="width:${lPct.toFixed(1)}%"></div>
+          <div class="stat-mini-bar-visit" style="width:${vPct.toFixed(1)}%"></div>
+        </div>
+        <span class="stat-val vv ${!localWins ? 'stat-winner' : ''}">${vDisplay}</span>
+      </div>
     </div>`;
 }
 
-function pct(val) {
-  return (val * 100).toFixed(0) + '%';
+// Normalize two values to [0,100] proportions for the mini bar
+function miniBarWidths(localVal, visitVal) {
+  const min = Math.min(localVal, visitVal, 0);
+  const lAdj = localVal - min;
+  const vAdj = visitVal - min;
+  const total = lAdj + vAdj;
+  if (total <= 0) return [50, 50];
+  return [(lAdj / total * 100), (vAdj / total * 100)];
+}
+
+// Count-up animation for probability display
+function animateCounter(id, target) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const duration = 900;
+  const startTime = performance.now();
+  function frame(now) {
+    const progress = Math.min((now - startTime) / duration, 1);
+    const eased = 1 - Math.pow(1 - progress, 3); // ease-out cubic
+    el.textContent = (eased * target).toFixed(1) + '%';
+    if (progress < 1) requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+}
+
+function scrollToTop() {
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 function showError(msg) {

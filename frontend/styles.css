@@ -734,3 +734,205 @@ footer {
     height: 300px;
   }
 }
+
+/* ═══════════════════════════════════════════════
+   DESIGN v4 — Enhanced Result Experience
+   ═══════════════════════════════════════════════ */
+
+/* Fix duplicate emoji from ::before + HTML */
+.stats-title::before {
+  content: none;
+}
+
+/* Winner-colored accent on result card top border */
+.result-card {
+  border-top: 3px solid transparent;
+}
+.result-card.win-local {
+  border-top-color: var(--local-blue);
+  box-shadow: var(--shadow-premium), 0 -6px 24px -8px rgba(59, 130, 246, 0.25);
+}
+.result-card.win-visit {
+  border-top-color: var(--visit-coral);
+  box-shadow: var(--shadow-premium), 0 -6px 24px -8px rgba(239, 68, 68, 0.25);
+}
+
+/* ── Match header blocks with role tags ── */
+.match-header {
+  align-items: start;
+}
+.team-name-block {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.3rem;
+}
+.team-name-block.right {
+  align-items: flex-end;
+}
+.team-name-block.winner .team-name {
+  filter: brightness(1.25);
+}
+.vs-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-top: 0.5rem;
+}
+.crown {
+  font-size: 0.95rem;
+  display: block;
+  line-height: 1;
+  animation: crown-pulse 2s ease-in-out infinite;
+}
+@keyframes crown-pulse {
+  0%, 100% { transform: translateY(0) scale(1); opacity: 1; }
+  50%       { transform: translateY(-3px) scale(1.1); opacity: 0.85; }
+}
+.team-role-tag {
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  opacity: 0.6;
+}
+.local-tag { color: var(--local-blue); }
+.visit-tag { color: var(--visit-coral); }
+
+/* ── Probability section — restructured ── */
+.prob-numbers-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+.prob-center-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--text-muted);
+  text-align: center;
+  flex-shrink: 0;
+}
+.prob-teams-row {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 0.65rem;
+}
+.prob-team-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  max-width: 45%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0.75;
+}
+.prob-team-label.local { color: var(--local-blue); }
+.prob-team-label.visit { color: var(--visit-coral); }
+
+/* ── Stats grid: 2 columns on desktop ── */
+.stats-grid {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+/* ── Stat row: vertical layout with mini comparison bar ── */
+.stat-row {
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: stretch;
+  gap: 0.55rem;
+}
+.stat-values-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+.stat-val {
+  font-size: 0.88rem;
+  font-weight: 700;
+  min-width: 38px;
+  flex-shrink: 0;
+}
+.stat-val.lv {
+  color: var(--local-blue);
+  text-align: right;
+}
+.stat-val.vv {
+  color: var(--visit-coral);
+  text-align: left;
+}
+.stat-val.stat-winner {
+  font-size: 0.95rem;
+  opacity: 1;
+}
+.stat-val:not(.stat-winner) {
+  opacity: 0.45;
+}
+.stat-mini-bar-track {
+  flex: 1;
+  height: 5px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 99px;
+  overflow: hidden;
+  display: flex;
+}
+.stat-mini-bar-local {
+  background: linear-gradient(90deg, #1d4ed8, var(--local-blue));
+  height: 100%;
+  border-radius: 99px 0 0 99px;
+  opacity: 0.9;
+  transition: width 0.9s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.stat-mini-bar-visit {
+  background: linear-gradient(90deg, var(--visit-coral), #b91c1c);
+  height: 100%;
+  border-radius: 0 99px 99px 0;
+  opacity: 0.9;
+  transition: width 0.9s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* ── Predict again / New prediction button ── */
+.predict-again-btn {
+  display: block;
+  width: 100%;
+  margin-top: 1.75rem;
+  padding: 0.8rem 1rem;
+  background: transparent;
+  border: 1px solid var(--border-glass-active);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  font-size: 0.88rem;
+  font-weight: 600;
+  font-family: var(--font-family);
+  cursor: pointer;
+  transition: var(--transition-smooth);
+  letter-spacing: 0.04em;
+}
+.predict-again-btn:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-primary);
+  border-color: rgba(255, 255, 255, 0.2);
+  transform: translateY(-1px);
+}
+
+/* ── Responsive fixes for v4 ── */
+@media (max-width: 600px) {
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+  .match-header {
+    align-items: center;
+  }
+  .team-name-block,
+  .team-name-block.right {
+    align-items: center;
+  }
+  .prob-numbers-row {
+    gap: 0.5rem;
+  }
+  .prob-center-label {
+    font-size: 0.6rem;
+  }
+}
