@@ -1,8 +1,8 @@
 {
-  "model_name": "BBL_XGBoost_v1",
-  "accuracy_test": 0.5588,
-  "roc_auc_test": 0.6077,
-  "brier_test": 0.2712,
+  "model_name": "BBL_XGBoost_v2_elo",
+  "accuracy_test": 0.5478,
+  "roc_auc_test": 0.6456,
+  "brier_test": 0.269,
   "feature_cols": [
     "home_pts_avg_5",
     "home_pts_conceded_avg_5",
@@ -31,7 +31,13 @@
     "is_home",
     "home_win_rate_3",
     "away_win_rate_3",
-    "win_rate_diff_3"
+    "win_rate_diff_3",
+    "home_elo",
+    "away_elo",
+    "elo_diff",
+    "home_days_rest",
+    "away_days_rest",
+    "rest_diff"
   ],
   "train_seasons": [
     "2020-21",
@@ -40,5 +46,5 @@
   ],
   "val_season": "2023-24",
   "test_season": "2024-25",
-  "n_features": 28
+  "n_features": 34
 }

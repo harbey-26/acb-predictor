@@ -50,6 +50,9 @@ FEATURE_COLS = [
     "h2h_home_wins", "h2h_total", "h2h_home_rate",
     "is_home",
     "home_win_rate_3", "away_win_rate_3", "win_rate_diff_3",
+    # v2: ELO dinámico + días de descanso
+    "home_elo", "away_elo", "elo_diff",
+    "home_days_rest", "away_days_rest", "rest_diff",
 ]
 
 TARGET_COL = "target"
@@ -190,7 +193,7 @@ def main() -> None:
     print(f"\nModelo guardado en: {MODEL_PATH}")
 
     meta = {
-        "model_name": "BBL_XGBoost_v1",
+        "model_name": "BBL_XGBoost_v2_elo",
         "accuracy_test": round(acc, 4),
         "roc_auc_test": round(auc, 4),
         "brier_test": round(brier, 4),

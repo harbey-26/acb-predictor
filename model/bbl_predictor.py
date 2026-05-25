@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import os
+from datetime import date, timezone
 from typing import Dict, List, Optional
 
 import joblib
@@ -18,9 +19,55 @@ MODEL_PATH = os.path.join(BASE_DIR, "model", "artifacts", "bbl_model.pkl")
 META_PATH = os.path.join(BASE_DIR, "model", "artifacts", "bbl_model_meta.json")
 MATCHES_PATH = os.path.join(BASE_DIR, "data", "processed", "bbl_matches.csv")
 
+ELO_INITIAL = 1500
+ELO_K = 20
+ELO_HOME_ADVANTAGE = 100
+ELO_SEASON_REGRESSION = 1 / 3
+MAX_DAYS_REST = 30
+
 _model = None
 _meta = None
 _matches_df: Optional[pd.DataFrame] = None
+_elo_ratings: Optional[Dict[int, float]] = None   # club_id → ELO actual
+_last_game_date: Optional[Dict[int, pd.Timestamp]] = None  # club_id → fecha último partido
+
+
+def _compute_elo_and_rest() -> None:
+    """Recalcula ELO y última fecha de partido para todos los equipos desde bbl_matches.csv."""
+    global _elo_ratings, _last_game_date
+    ratings: Dict[int, float] = {}
+    last_date: Dict[int, pd.Timestamp] = {}
+    prev_season: Optional[str] = None
+
+    for _, row in _matches_df.sort_values("fecha", kind="mergesort").iterrows():
+        home_id = int(row["club_local_id"])
+        away_id = int(row["club_visitante_id"])
+        season = row["temporada"]
+
+        if season != prev_season and prev_season is not None:
+            for tid in list(ratings.keys()):
+                ratings[tid] = ratings[tid] * (1 - ELO_SEASON_REGRESSION) + ELO_INITIAL * ELO_SEASON_REGRESSION
+        prev_season = season
+
+        if home_id not in ratings:
+            ratings[home_id] = ELO_INITIAL
+        if away_id not in ratings:
+            ratings[away_id] = ELO_INITIAL
+
+        home_elo = ratings[home_id]
+        away_elo = ratings[away_id]
+
+        home_elo_adj = home_elo + ELO_HOME_ADVANTAGE
+        exp_home = 1 / (1 + 10 ** ((away_elo - home_elo_adj) / 400))
+        actual_home = 1.0 if row["ganador"] == "local" else 0.0
+
+        ratings[home_id] = home_elo + ELO_K * (actual_home - exp_home)
+        ratings[away_id] = away_elo + ELO_K * ((1 - actual_home) - (1 - exp_home))
+        last_date[home_id] = row["fecha"]
+        last_date[away_id] = row["fecha"]
+
+    _elo_ratings = ratings
+    _last_game_date = last_date
 
 
 def _load() -> None:
@@ -33,6 +80,7 @@ def _load() -> None:
     if _matches_df is None:
         _matches_df = pd.read_csv(MATCHES_PATH)
         _matches_df["fecha"] = pd.to_datetime(_matches_df["fecha"], utc=True)
+        _compute_elo_and_rest()
 
 
 def is_available() -> bool:
@@ -147,6 +195,21 @@ def predict(equipo_local: str, equipo_visitante: str) -> Dict:
     as3 = _get_last_stats(away_id, 3)
     h2h = _get_h2h(home_id, away_id)
 
+    # ELO actual
+    home_elo = _elo_ratings.get(home_id, ELO_INITIAL) if _elo_ratings else ELO_INITIAL
+    away_elo = _elo_ratings.get(away_id, ELO_INITIAL) if _elo_ratings else ELO_INITIAL
+
+    # Días de descanso desde último partido hasta hoy
+    today = pd.Timestamp(date.today(), tz="UTC")
+    def days_rest(club_id: int) -> int:
+        if _last_game_date and club_id in _last_game_date:
+            d = (today - _last_game_date[club_id]).days
+            return min(d, MAX_DAYS_REST)
+        return 7
+
+    home_rest = days_rest(home_id)
+    away_rest = days_rest(away_id)
+
     def s(stats: Dict, key: str) -> float:
         return stats.get(key, np.nan)
 
@@ -179,6 +242,12 @@ def predict(equipo_local: str, equipo_visitante: str) -> Dict:
         "home_win_rate_3": s(hs3, "win_rate"),
         "away_win_rate_3": s(as3, "win_rate"),
         "win_rate_diff_3": s(hs3, "win_rate") - s(as3, "win_rate"),
+        "home_elo": home_elo,
+        "away_elo": away_elo,
+        "elo_diff": home_elo - away_elo,
+        "home_days_rest": home_rest,
+        "away_days_rest": away_rest,
+        "rest_diff": home_rest - away_rest,
     }
 
     feature_cols = _meta["feature_cols"]

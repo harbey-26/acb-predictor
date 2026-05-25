@@ -23,6 +23,13 @@ OUTPUT_PATH = os.path.join(BASE_DIR, "data", "processed", "bbl_features.csv")
 WINDOWS = [5, 10]
 H2H_WINDOW = 10
 
+# ── ELO constants ──────────────────────────────────────────────────
+ELO_INITIAL = 1500
+ELO_K = 20
+ELO_HOME_ADVANTAGE = 100   # puntos extra para equipo local en cálculo de probabilidad
+ELO_SEASON_REGRESSION = 1 / 3  # regresión hacia la media entre temporadas
+MAX_DAYS_REST = 30  # cap para días de descanso (inicio de temporada)
+
 
 def load_matches() -> pd.DataFrame:
     df = pd.read_csv(MATCHES_PATH)
@@ -119,11 +126,92 @@ def compute_h2h(df: pd.DataFrame, window: int = H2H_WINDOW) -> pd.DataFrame:
     return result
 
 
+def compute_elo(df: pd.DataFrame) -> Dict[str, Dict]:
+    """
+    Calcula ELO pre-partido para cada juego (sin data leakage).
+    Procesa todos los partidos (regular + playoffs) en orden cronológico
+    para tener ratings actualizados, pero devuelve ELO para todos los game_id.
+    Regresión hacia la media (1/3) al inicio de cada temporada.
+    """
+    ratings: Dict[int, float] = {}
+    prev_season: Optional[str] = None
+    results: Dict[str, Dict] = {}
+
+    for _, row in df.sort_values("fecha", kind="mergesort").iterrows():
+        home_id = int(row["club_local_id"])
+        away_id = int(row["club_visitante_id"])
+        season = row["temporada"]
+
+        # Regresión al inicio de cada temporada nueva
+        if season != prev_season and prev_season is not None:
+            for tid in list(ratings.keys()):
+                ratings[tid] = ratings[tid] * (1 - ELO_SEASON_REGRESSION) + ELO_INITIAL * ELO_SEASON_REGRESSION
+        prev_season = season
+
+        if home_id not in ratings:
+            ratings[home_id] = ELO_INITIAL
+        if away_id not in ratings:
+            ratings[away_id] = ELO_INITIAL
+
+        home_elo = ratings[home_id]
+        away_elo = ratings[away_id]
+
+        results[row["game_id"]] = {
+            "home_elo": round(home_elo, 2),
+            "away_elo": round(away_elo, 2),
+            "elo_diff": round(home_elo - away_elo, 2),
+        }
+
+        # Actualizar ratings post-partido (ventaja local incorporada en expected)
+        home_elo_adj = home_elo + ELO_HOME_ADVANTAGE
+        exp_home = 1 / (1 + 10 ** ((away_elo - home_elo_adj) / 400))
+        actual_home = 1.0 if row["ganador"] == "local" else 0.0
+
+        ratings[home_id] = home_elo + ELO_K * (actual_home - exp_home)
+        ratings[away_id] = away_elo + ELO_K * ((1 - actual_home) - (1 - exp_home))
+
+    return results
+
+
+def compute_days_rest(df: pd.DataFrame) -> Dict[str, Dict]:
+    """Días de descanso desde el último partido de cada equipo (cap: MAX_DAYS_REST)."""
+    last_date: Dict[int, pd.Timestamp] = {}
+    results: Dict[str, Dict] = {}
+
+    for _, row in df.sort_values("fecha", kind="mergesort").iterrows():
+        home_id = int(row["club_local_id"])
+        away_id = int(row["club_visitante_id"])
+        game_date = row["fecha"]
+        gid = row["game_id"]
+
+        home_rest = int((game_date - last_date[home_id]).days) if home_id in last_date else 7
+        away_rest = int((game_date - last_date[away_id]).days) if away_id in last_date else 7
+
+        home_rest = min(home_rest, MAX_DAYS_REST)
+        away_rest = min(away_rest, MAX_DAYS_REST)
+
+        results[gid] = {
+            "home_days_rest": home_rest,
+            "away_days_rest": away_rest,
+            "rest_diff": home_rest - away_rest,
+        }
+
+        last_date[home_id] = game_date
+        last_date[away_id] = game_date
+
+    return results
+
+
 def build_features(df: pd.DataFrame) -> pd.DataFrame:
     """Construye el dataset de features para partidos de liga regular."""
     df_lr = df[df["is_playoff"] == 0].copy().reset_index(drop=True)
     if df_lr.empty:
         raise ValueError("No hay partidos de liga regular en los datos BBL.")
+
+    # ELO y descanso se calculan sobre TODOS los partidos (incl. playoffs)
+    # para tener ratings precisos, pero sólo se usan en juegos de liga regular
+    elo_lookup = compute_elo(df)
+    rest_lookup = compute_days_rest(df)
 
     history = build_team_history(df_lr)
 
@@ -233,6 +321,18 @@ def build_features(df: pd.DataFrame) -> pd.DataFrame:
         row["h2h_total"] = h2h.get("h2h_total", 0)
         row["h2h_home_rate"] = h2h.get("h2h_home_rate", 0.5)
         row["is_home"] = 1
+
+        # ELO pre-partido
+        elo = elo_lookup.get(gid, {})
+        row["home_elo"] = elo.get("home_elo", ELO_INITIAL)
+        row["away_elo"] = elo.get("away_elo", ELO_INITIAL)
+        row["elo_diff"] = elo.get("elo_diff", 0.0)
+
+        # Días de descanso
+        rest = rest_lookup.get(gid, {})
+        row["home_days_rest"] = rest.get("home_days_rest", 7)
+        row["away_days_rest"] = rest.get("away_days_rest", 7)
+        row["rest_diff"] = rest.get("rest_diff", 0)
 
         row["target"] = 1 if match["ganador"] == "local" else 0
         feature_rows.append(row)
