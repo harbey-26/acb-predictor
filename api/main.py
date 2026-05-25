@@ -11,12 +11,13 @@ Inicio:
   uvicorn api.main:app --reload --port 8000
 """
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 import os
 import sys
+from typing import List
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -71,9 +72,10 @@ def leagues():
     return result
 
 
-@app.get("/teams", response_model=list)
-def teams(liga: str = Query("acb", description="Liga: 'acb' o 'bbl'")):
+@app.get("/teams", response_model=List[TeamInfo])
+def teams(response: Response, liga: str = Query("acb", description="Liga: 'acb' o 'bbl'")):
     """Devuelve la lista de equipos disponibles para la liga seleccionada."""
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
     liga = liga.lower()
     if liga == "bbl":
         if not bbl.is_available():

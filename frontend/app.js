@@ -51,7 +51,7 @@ async function loadTeams(liga) {
   bblNotice.classList.add('hidden');
 
   try {
-    const res = await fetch(`${API}/teams?liga=${liga}`);
+    const res = await fetch(`${API}/teams?liga=${liga}&_t=${Date.now()}`);
     if (res.status === 503) {
       bblNotice.classList.remove('hidden');
       return;
