@@ -1,4 +1,10 @@
 {
+  "model_name": "XGBoost_v2_win_rate_3",
+  "accuracy_test": 0.6993,
+  "roc_auc_test": 0.6936,
+  "brier_test": 0.2113,
+  "baseline_accuracy": 0.693,
+  "improvement": 0.0063,
   "feature_cols": [
     "home_pts_avg_5",
     "home_pts_conceded_avg_5",
@@ -32,27 +38,16 @@
     "h2h_home_wins",
     "h2h_total",
     "h2h_home_rate",
-    "is_home"
+    "is_home",
+    "home_win_rate_3",
+    "away_win_rate_3",
+    "win_rate_diff_3"
   ],
   "train_seasons": [
     "2020-21",
     "2021-22",
-    "2022-23",
-    "2023-24"
+    "2022-23"
   ],
-  "calibration_season": "2023-24",
-  "test_season": "2024-25",
-  "params": {
-    "n_estimators": 300,
-    "max_depth": 4,
-    "learning_rate": 0.05,
-    "subsample": 0.8,
-    "colsample_bytree": 0.8,
-    "min_child_weight": 3
-  },
-  "test_metrics": {
-    "accuracy": 0.6928,
-    "roc_auc": 0.6931,
-    "brier": 0.2108
-  }
+  "val_season": "2023-24",
+  "test_season": "2024-25"
 }

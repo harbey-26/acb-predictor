@@ -195,9 +195,11 @@ def predict(
     if home_id == away_id:
         raise ValueError("Los dos equipos deben ser distintos.")
 
-    home_stats = _get_last_stats(home_id, n=10)
-    away_stats = _get_last_stats(away_id, n=10)
-    h2h        = _get_h2h(home_id, away_id)
+    home_stats   = _get_last_stats(home_id, n=10)
+    away_stats   = _get_last_stats(away_id, n=10)
+    home_stats_3 = _get_last_stats(home_id, n=3)
+    away_stats_3 = _get_last_stats(away_id, n=3)
+    h2h          = _get_h2h(home_id, away_id)
 
     def s(stats: Dict, key: str, default: float = np.nan) -> float:
         return stats.get(key, default)
@@ -236,6 +238,9 @@ def predict(
         "h2h_total":                h2h["h2h_total"],
         "h2h_home_rate":            h2h["h2h_home_rate"],
         "is_home":                  1,
+        "home_win_rate_3":          s(home_stats_3, "win_rate"),
+        "away_win_rate_3":          s(away_stats_3, "win_rate"),
+        "win_rate_diff_3":          s(home_stats_3, "win_rate") - s(away_stats_3, "win_rate"),
     }
 
     feature_cols = _meta["feature_cols"]
