@@ -1,16 +1,17 @@
 """
-FastAPI backend para el predictor de la Liga ACB.
+FastAPI backend para el predictor de baloncesto (ACB + BBL).
 
 Endpoints:
-  GET  /teams           → lista de equipos disponibles
-  POST /predict         → predicción de un partido
-  GET  /health          → estado del servicio
+  GET  /teams?liga=acb     → lista de equipos disponibles
+  POST /predict            → predicción (campo 'liga' en el body: 'acb'|'bbl')
+  GET  /health             → estado del servicio
+  GET  /leagues            → ligas disponibles
 
 Inicio:
   uvicorn api.main:app --reload --port 8000
 """
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -20,12 +21,13 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from api.schemas import PredictRequest, PredictResponse, TeamInfo
-from model.predictor import predict, get_available_teams
+from model.predictor import predict as acb_predict, get_available_teams as acb_teams
+import model.bbl_predictor as bbl
 
 app = FastAPI(
-    title="ACB Predictor API",
-    description="Predicción de partidos de la Liga ACB española",
-    version="1.0.0",
+    title="Basketball Predictor API",
+    description="Predicción de partidos: Liga ACB española y Basketball Bundesliga alemana",
+    version="2.0.0",
 )
 
 app.add_middleware(
@@ -35,7 +37,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Servir el frontend estático
 FRONTEND_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "frontend")
 app.mount("/static", StaticFiles(directory=FRONTEND_DIR), name="static")
 
@@ -47,26 +48,56 @@ def root():
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "model": "XGBoost v2 + Platt calibration", "accuracy_test": "69.9%"}
+    bbl_status = "available" if bbl.is_available() else "not_trained"
+    return {
+        "status": "ok",
+        "acb_model": "XGBoost v2 + Platt calibration (69.9%)",
+        "bbl_model": bbl_status,
+    }
 
 
-@app.get("/teams", response_model=list[TeamInfo])
-def teams():
-    """Devuelve la lista de equipos disponibles para predecir."""
-    return get_available_teams()
+@app.get("/leagues")
+def leagues():
+    """Devuelve las ligas disponibles."""
+    result = [{"id": "acb", "nombre": "Liga ACB (España)", "disponible": True}]
+    result.append({
+        "id": "bbl",
+        "nombre": "Basketball Bundesliga (Alemania)",
+        "disponible": bbl.is_available(),
+    })
+    return result
+
+
+@app.get("/teams", response_model=list)
+def teams(liga: str = Query("acb", description="Liga: 'acb' o 'bbl'")):
+    """Devuelve la lista de equipos disponibles para la liga seleccionada."""
+    liga = liga.lower()
+    if liga == "bbl":
+        if not bbl.is_available():
+            raise HTTPException(status_code=503, detail="Modelo BBL no disponible aún. Los datos están siendo recopilados.")
+        return bbl.get_available_teams()
+    return acb_teams()
 
 
 @app.post("/predict", response_model=PredictResponse)
 def predict_match(req: PredictRequest):
     """
     Predice el resultado de un partido.
-
-    - **equipo_local**: nombre (parcial) del equipo que juega en casa
-    - **equipo_visitante**: nombre (parcial) del equipo visitante
+    - **liga**: 'acb' (default) o 'bbl'
+    - **equipo_local**: nombre del equipo local
+    - **equipo_visitante**: nombre del equipo visitante
     """
+    liga = (req.liga or "acb").lower()
     try:
-        result = predict(req.equipo_local, req.equipo_visitante)
+        if liga == "bbl":
+            if not bbl.is_available():
+                raise HTTPException(status_code=503, detail="Modelo BBL no disponible. Los datos están siendo procesados.")
+            result = bbl.predict(req.equipo_local, req.equipo_visitante)
+        else:
+            result = acb_predict(req.equipo_local, req.equipo_visitante)
         return result
+    except HTTPException:
+        raise
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
     except Exception as e:

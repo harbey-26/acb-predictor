@@ -10,6 +10,7 @@ class TeamInfo(BaseModel):
 class PredictRequest(BaseModel):
     equipo_local: str
     equipo_visitante: str
+    liga: str = "acb"  # "acb" | "bbl"
 
 
 class FeaturesSummary(BaseModel):

@@ -1,19 +1,66 @@
 const API = '';
 
-const selLocal  = document.getElementById('sel-local');
-const selVisit  = document.getElementById('sel-visit');
-const btnSwap   = document.getElementById('btn-swap');
-const btnPredict= document.getElementById('btn-predict');
-const resultCard= document.getElementById('result-card');
-const resultContent = document.getElementById('result-content');
-const errorBox  = document.getElementById('error-box');
-const loader    = document.getElementById('loader');
+let currentLiga = 'acb';
 
-// ── Cargar equipos al inicio ──────────────────────────────────────
-async function loadTeams() {
+const selLocal       = document.getElementById('sel-local');
+const selVisit       = document.getElementById('sel-visit');
+const btnSwap        = document.getElementById('btn-swap');
+const btnPredict     = document.getElementById('btn-predict');
+const resultCard     = document.getElementById('result-card');
+const resultContent  = document.getElementById('result-content');
+const errorBox       = document.getElementById('error-box');
+const loader         = document.getElementById('loader');
+const headerTitle    = document.getElementById('header-title');
+const headerSubtitle = document.getElementById('header-subtitle');
+const footerText     = document.getElementById('footer-text');
+const bblNotice      = document.getElementById('bbl-notice');
+
+// ── League selector ───────────────────────────────────────────────
+document.querySelectorAll('.league-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const liga = btn.dataset.liga;
+    if (liga === currentLiga) return;
+    currentLiga = liga;
+
+    document.querySelectorAll('.league-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+
+    hideAll();
+    resetSelects();
+    updateLeagueUI(liga);
+    loadTeams(liga);
+  });
+});
+
+function updateLeagueUI(liga) {
+  if (liga === 'bbl') {
+    headerTitle.textContent = 'Basketball Predictor';
+    headerSubtitle.textContent = 'Predicción de partidos · Bundesliga (BBL) · Modelo ML';
+    footerText.textContent = 'Datos: 5 temporadas (2020-21 → 2024-25) · eurobasket.com';
+  } else {
+    headerTitle.textContent = 'Basketball Predictor';
+    headerSubtitle.textContent = 'Predicción de partidos · Liga ACB (España) · Modelo ML (69.9% accuracy)';
+    footerText.textContent = 'Datos: 1.663 partidos · 5 temporadas (2020-21 → 2024-25) · api2.acb.com';
+  }
+}
+
+// ── Cargar equipos ────────────────────────────────────────────────
+async function loadTeams(liga) {
+  liga = liga || currentLiga;
+  resetSelects();
+  bblNotice.classList.add('hidden');
+
   try {
-    const res  = await fetch(`${API}/teams`);
+    const res = await fetch(`${API}/teams?liga=${liga}`);
+    if (res.status === 503) {
+      bblNotice.classList.remove('hidden');
+      return;
+    }
     const teams = await res.json();
+    if (!Array.isArray(teams) || teams.length === 0) {
+      bblNotice.classList.remove('hidden');
+      return;
+    }
     [selLocal, selVisit].forEach(sel => {
       teams.forEach(t => {
         const opt = document.createElement('option');
@@ -25,6 +72,13 @@ async function loadTeams() {
   } catch {
     showError('No se pudo conectar con la API. ¿Está corriendo el servidor?');
   }
+}
+
+function resetSelects() {
+  [selLocal, selVisit].forEach(sel => {
+    sel.innerHTML = '<option value="">— Elige equipo —</option>';
+  });
+  btnPredict.disabled = true;
 }
 
 // ── Habilitar botón solo cuando hay dos equipos distintos ─────────
@@ -55,6 +109,7 @@ btnPredict.addEventListener('click', async () => {
       body: JSON.stringify({
         equipo_local:     selLocal.value,
         equipo_visitante: selVisit.value,
+        liga:             currentLiga,
       }),
     });
 
@@ -82,6 +137,7 @@ function renderResult(d) {
   const verdictClass = isLocalWin ? 'win-local' : 'win-visit';
 
   const f = d.features_usadas;
+  const ligaLabel = currentLiga === 'bbl' ? 'Diferencial puntos' : 'Valoración ACB promedio';
 
   resultContent.innerHTML = `
     <!-- Cabecera del partido -->
@@ -122,7 +178,7 @@ function renderResult(d) {
           pct(f.home_win_rate_reciente), pct(f.away_win_rate_reciente))}
       ${statRow('Puntos promedio',
           f.home_pts_promedio.toFixed(1), f.away_pts_promedio.toFixed(1))}
-      ${statRow('Valoración ACB promedio',
+      ${statRow(ligaLabel,
           f.home_val_promedio.toFixed(1), f.away_val_promedio.toFixed(1))}
       ${statRow('H2H enfrentamientos',
           f.h2h_enfrentamientos, f.h2h_enfrentamientos)}
@@ -162,4 +218,5 @@ function hideAll() {
 }
 
 // ── Init ─────────────────────────────────────────────────────────
-loadTeams();
+updateLeagueUI('acb');
+loadTeams('acb');

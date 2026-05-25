@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ACB Predictor · Liga Endesa</title>
+  <title>Basketball Predictor · ACB &amp; BBL</title>
   <link rel="stylesheet" href="/static/styles.css" />
 </head>
 <body>
@@ -11,13 +11,31 @@
     <div class="header-inner">
       <span class="logo-icon">🏀</span>
       <div>
-        <h1>ACB Predictor</h1>
-        <p class="subtitle">Predicción de partidos · Liga Endesa · Modelo ML (69.9% accuracy)</p>
+        <h1 id="header-title">Basketball Predictor</h1>
+        <p class="subtitle" id="header-subtitle">Predicción de partidos · Modelo ML</p>
       </div>
     </div>
   </header>
 
   <main>
+    <!-- Selector de liga -->
+    <section class="card league-card">
+      <h2>Liga</h2>
+      <div class="league-selector">
+        <button class="league-btn active" data-liga="acb" id="btn-liga-acb">
+          <span class="league-flag">🇪🇸</span>
+          <span class="league-name">ACB · Liga Endesa</span>
+        </button>
+        <button class="league-btn" data-liga="bbl" id="btn-liga-bbl">
+          <span class="league-flag">🇩🇪</span>
+          <span class="league-name">BBL · Bundesliga</span>
+        </button>
+      </div>
+      <div id="bbl-notice" class="bbl-notice hidden">
+        El modelo BBL se está entrenando. Vuelve en unos minutos.
+      </div>
+    </section>
+
     <section class="card selector-card">
       <h2>Selecciona los equipos</h2>
 
@@ -67,9 +85,9 @@
   </main>
 
   <footer>
-    <p>Datos: 1.663 partidos · 5 temporadas (2020-21 → 2024-25) · api2.acb.com</p>
+    <p id="footer-text">Datos: 5 temporadas (2020-21 → 2024-25) · Liga ACB &amp; BBL</p>
   </footer>
 
-  <script src="/static/app.js"></script>
+  <script src="/static/app.js?v=2"></script>
 </body>
 </html>
