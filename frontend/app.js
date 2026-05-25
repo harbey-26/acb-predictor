@@ -35,7 +35,7 @@ document.querySelectorAll('.league-btn').forEach(btn => {
 function updateLeagueUI(liga) {
   if (liga === 'bbl') {
     headerTitle.textContent = 'Basketball Predictor';
-    headerSubtitle.textContent = 'Predicción de partidos · Bundesliga (BBL) · Modelo ML';
+    headerSubtitle.textContent = 'Predicción de partidos · Bundesliga (BBL) · Modelo ML (AUC 0.66)';
     footerText.textContent = 'Datos: 5 temporadas (2020-21 → 2024-25) · eurobasket.com';
   } else {
     headerTitle.textContent = 'Basketball Predictor';

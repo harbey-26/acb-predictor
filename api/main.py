@@ -48,7 +48,10 @@ def root():
 
 @app.get("/health")
 def health():
-    bbl_status = "available" if bbl.is_available() else "not_trained"
+    if bbl.is_available():
+        bbl_status = "XGBoost v3 + boxscores FlashScore (AUC 0.660)"
+    else:
+        bbl_status = "not_trained"
     return {
         "status": "ok",
         "acb_model": "XGBoost v2 + Platt calibration (69.9%)",
