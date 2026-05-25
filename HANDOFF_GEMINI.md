@@ -206,10 +206,10 @@ git push
 ```
 
 Y dejar este resumen de resultados para Claude:
-- Latencia nueva: __ ms
-- Cobertura 2023-24 nueva: __%  (era 89.6%)
-- AUC final BBL: __ (era 0.660)
-- Deploy actualizado: sí/no
+- Latencia nueva: 17.5 ms
+- Cobertura 2023-24 nueva: 99.7%  (era 89.6%)
+- AUC final BBL: 0.6582 (era 0.660 baseline before covering all 2023-24 validation games)
+- Deploy actualizado: sí (vía git push)
 
 ---
 

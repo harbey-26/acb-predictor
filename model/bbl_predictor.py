@@ -23,7 +23,7 @@ ENRICHED_MATCHES_PATH = os.path.join(BASE_DIR, "data", "processed", "bbl_matches
 
 # Boxscore stats for v3 rolling predictions
 BOX_STATS  = ["fg_pct", "fg3_pct", "ft_pct", "reb", "ast", "tov"]
-BOX_WINDOWS = [5, 10]
+BOX_WINDOWS = [3, 5, 10]
 
 ELO_INITIAL = 1500
 ELO_K = 20
@@ -36,6 +36,8 @@ _meta = None
 _matches_df: Optional[pd.DataFrame] = None
 _elo_ratings: Optional[Dict[int, float]] = None   # club_id → ELO actual
 _last_game_date: Optional[Dict[int, pd.Timestamp]] = None  # club_id → fecha último partido
+_boxscore_lookup: Optional[Dict[int, pd.DataFrame]] = None
+
 
 
 def _compute_elo_and_rest() -> None:
@@ -76,6 +78,45 @@ def _compute_elo_and_rest() -> None:
     _last_game_date = last_date
 
 
+def _build_boxscore_index() -> None:
+    """Preconstruye índice club_id → DataFrame de sus actuaciones de boxscore."""
+    global _boxscore_lookup
+    if "home_fg_pct" not in _matches_df.columns:
+        _boxscore_lookup = {}
+        return
+
+    box_map = {
+        "fg_pct":  ("home_fg_pct",  "away_fg_pct"),
+        "fg3_pct": ("home_fg3_pct", "away_fg3_pct"),
+        "ft_pct":  ("home_ft_pct",  "away_ft_pct"),
+        "reb":     ("home_reb",     "away_reb"),
+        "ast":     ("home_ast",     "away_ast"),
+        "tov":     ("home_tov",     "away_tov"),
+    }
+
+    from collections import defaultdict
+    club_rows = defaultdict(list)
+
+    for _, row in _matches_df.iterrows():
+        fecha = row["fecha"]
+        home_id = int(row["club_local_id"])
+        away_id = int(row["club_visitante_id"])
+
+        home_entry = {"fecha": fecha}
+        away_entry = {"fecha": fecha}
+        for stat, (hc, ac) in box_map.items():
+            home_entry[stat] = row.get(hc, np.nan)
+            away_entry[stat] = row.get(ac, np.nan)
+
+        club_rows[home_id].append(home_entry)
+        club_rows[away_id].append(away_entry)
+
+    _boxscore_lookup = {
+        club_id: pd.DataFrame(rows).sort_values("fecha").reset_index(drop=True)
+        for club_id, rows in club_rows.items()
+    }
+
+
 def _load() -> None:
     global _model, _meta, _matches_df
     if _model is None:
@@ -88,6 +129,8 @@ def _load() -> None:
         _matches_df = pd.read_csv(path)
         _matches_df["fecha"] = pd.to_datetime(_matches_df["fecha"], utc=True)
         _compute_elo_and_rest()
+        _build_boxscore_index()
+
 
 
 def is_available() -> bool:
@@ -184,41 +227,10 @@ def _get_h2h(home_id: int, away_id: int, window: int = 10) -> Dict:
 
 
 def _get_last_boxscore_stats(club_id: int, n: int = 5) -> Dict[str, float]:
-    """
-    Retorna el promedio de las últimas n actuaciones de boxscore del equipo.
-    Funciona tanto como local como visitante. Retorna {} si no hay datos.
-    """
     _load()
-    if "home_fg_pct" not in _matches_df.columns:
+    if not _boxscore_lookup or club_id not in _boxscore_lookup:
         return {}
-
-    # Columnas de boxscore home/away en el CSV
-    box_map = {
-        "fg_pct":  ("home_fg_pct",  "away_fg_pct"),
-        "fg3_pct": ("home_fg3_pct", "away_fg3_pct"),
-        "ft_pct":  ("home_ft_pct",  "away_ft_pct"),
-        "reb":     ("home_reb",     "away_reb"),
-        "ast":     ("home_ast",     "away_ast"),
-        "tov":     ("home_tov",     "away_tov"),
-    }
-
-    rows = []
-    for _, row in _matches_df.iterrows():
-        if row["club_local_id"] == club_id:
-            entry = {"fecha": row["fecha"]}
-            for stat, (hc, _) in box_map.items():
-                entry[stat] = row.get(hc, np.nan)
-            rows.append(entry)
-        elif row["club_visitante_id"] == club_id:
-            entry = {"fecha": row["fecha"]}
-            for stat, (_, ac) in box_map.items():
-                entry[stat] = row.get(ac, np.nan)
-            rows.append(entry)
-
-    if not rows:
-        return {}
-
-    hist = pd.DataFrame(rows).sort_values("fecha").tail(n)
+    hist = _boxscore_lookup[club_id].tail(n)
     result = {}
     for stat in BOX_STATS:
         if stat in hist.columns:
@@ -246,6 +258,8 @@ def predict(equipo_local: str, equipo_visitante: str) -> Dict:
     as3 = _get_last_stats(away_id, 3)
     h2h = _get_h2h(home_id, away_id)
     # Boxscore rolling (v3)
+    hbox3  = _get_last_boxscore_stats(home_id, 3)
+    abox3  = _get_last_boxscore_stats(away_id, 3)
     hbox5  = _get_last_boxscore_stats(home_id, 5)
     abox5  = _get_last_boxscore_stats(away_id, 5)
     hbox10 = _get_last_boxscore_stats(home_id, 10)
@@ -304,11 +318,16 @@ def predict(equipo_local: str, equipo_visitante: str) -> Dict:
         "home_days_rest": home_rest,
         "away_days_rest": away_rest,
         "rest_diff": home_rest - away_rest,
+        # Option A individual 3P% features
+        "home_fg3_pct_avg_5": hbox5.get("fg3_pct", np.nan),
+        "away_fg3_pct_avg_5": abox5.get("fg3_pct", np.nan),
+        "home_fg3_pct_avg_10": hbox10.get("fg3_pct", np.nan),
+        "away_fg3_pct_avg_10": abox10.get("fg3_pct", np.nan),
         # Boxscore rolling features (v3) — diferencias home−away por ventana
         **{
             f"{stat}_diff_{w}": (
-                (hbox5 if w == 5 else hbox10).get(stat, np.nan) -
-                (abox5 if w == 5 else abox10).get(stat, np.nan)
+                (hbox3 if w == 3 else (hbox5 if w == 5 else hbox10)).get(stat, np.nan) -
+                (abox3 if w == 3 else (abox5 if w == 5 else abox10)).get(stat, np.nan)
             )
             for w in BOX_WINDOWS for stat in BOX_STATS
         },

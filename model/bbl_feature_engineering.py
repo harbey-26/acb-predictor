@@ -26,7 +26,7 @@ OUTPUT_PATH           = os.path.join(BASE_DIR, "data", "processed", "bbl_feature
 
 # Estadísticas de boxscore para rolling features (v3)
 BOX_STATS = ["fg_pct", "fg3_pct", "ft_pct", "reb", "ast", "tov"]
-BOX_WINDOWS = [5, 10]
+BOX_WINDOWS = [3, 5, 10]
 
 WINDOWS = [5, 10]
 H2H_WINDOW = 10

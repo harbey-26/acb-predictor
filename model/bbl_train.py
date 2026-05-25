@@ -39,13 +39,16 @@ MODEL_PATH = os.path.join(ARTIFACTS_DIR, "bbl_model.pkl")
 META_PATH = os.path.join(ARTIFACTS_DIR, "bbl_model_meta.json")
 
 _BOX_STATS  = ["fg_pct", "fg3_pct", "ft_pct", "reb", "ast", "tov"]
-_BOX_WINDOWS = [5, 10]
-# Solo diferencias (home - away) por ventana: 6 stats × 2 ventanas = 12 features
+_BOX_WINDOWS = [3, 5, 10]
+# Solo diferencias (home - away) por ventana: 6 stats × 3 ventanas = 18 features
 # Mejor generalización que incluir home_/away_ por separado (menos overfitting)
 _BOX_FEATURES = [
     f"{stat}_diff_{w}"
     for w in _BOX_WINDOWS
     for stat in _BOX_STATS
+] + [
+    "home_fg3_pct_avg_5", "away_fg3_pct_avg_5",
+    "home_fg3_pct_avg_10", "away_fg3_pct_avg_10",
 ]
 
 FEATURE_COLS = [

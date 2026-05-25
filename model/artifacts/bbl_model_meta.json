@@ -1,8 +1,8 @@
 {
   "model_name": "BBL_XGBoost_v3_boxscore",
-  "accuracy_test": 0.5368,
-  "roc_auc_test": 0.6596,
-  "brier_test": 0.2603,
+  "accuracy_test": 0.5404,
+  "roc_auc_test": 0.6582,
+  "brier_test": 0.2655,
   "feature_cols": [
     "home_pts_avg_5",
     "home_pts_conceded_avg_5",
@@ -38,6 +38,12 @@
     "home_days_rest",
     "away_days_rest",
     "rest_diff",
+    "fg_pct_diff_3",
+    "fg3_pct_diff_3",
+    "ft_pct_diff_3",
+    "reb_diff_3",
+    "ast_diff_3",
+    "tov_diff_3",
     "fg_pct_diff_5",
     "fg3_pct_diff_5",
     "ft_pct_diff_5",
@@ -49,7 +55,11 @@
     "ft_pct_diff_10",
     "reb_diff_10",
     "ast_diff_10",
-    "tov_diff_10"
+    "tov_diff_10",
+    "home_fg3_pct_avg_5",
+    "away_fg3_pct_avg_5",
+    "home_fg3_pct_avg_10",
+    "away_fg3_pct_avg_10"
   ],
   "train_seasons": [
     "2020-21",
@@ -58,5 +68,5 @@
   ],
   "val_season": "2023-24",
   "test_season": "2024-25",
-  "n_features": 46
+  "n_features": 56
 }

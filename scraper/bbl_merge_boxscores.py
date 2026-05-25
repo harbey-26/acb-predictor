@@ -93,10 +93,10 @@ FS_TO_CSV: Dict[str, str] = {
     "fitone wuerzburg":      "FITOne Wuerzburg Baskets",
     "paderborn":             "Baskets Paderborn",
     "baskets paderborn":     "Baskets Paderborn",
-    # Tiger Tübingen (neoPhoenix) — not in current bbl_matches.csv
-    "tubingen":              "neoPhoenix Tubingen",
-    "neophoenix":            "neoPhoenix Tubingen",
-    "tigers tubingen":       "neoPhoenix Tubingen",
+    # Tiger Tübingen (neoPhoenix) — in current bbl_matches.csv mapped to Baskets Paderborn
+    "tubingen":              "Baskets Paderborn",
+    "neophoenix":            "Baskets Paderborn",
+    "tigers tubingen":       "Baskets Paderborn",
 }
 
 # Columnas de boxscore que se añadirán al CSV
