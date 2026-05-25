@@ -47,7 +47,7 @@ def root():
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "model": "XGBoost + Platt calibration", "accuracy_test": "69.3%"}
+    return {"status": "ok", "model": "XGBoost v2 + Platt calibration", "accuracy_test": "69.9%"}
 
 
 @app.get("/teams", response_model=list[TeamInfo])
